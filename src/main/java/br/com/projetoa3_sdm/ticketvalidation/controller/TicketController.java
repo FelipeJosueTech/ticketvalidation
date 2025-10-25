@@ -21,4 +21,5 @@ public class TicketController {
 	public Ticket validate(@RequestBody TicketRequest request) {
 		return ticketService.validate(request);
 	}
+	
 }

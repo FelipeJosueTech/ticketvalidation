@@ -17,11 +17,16 @@ public class Ticket {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private long id;
 	
+	
 	@NotEmpty
 	private String codigoDeBarras;
+	
 	private String nomeDoBanco;
+	
 	private String beneficiario;
+	
 	private String pagador;
+	
 	private Double valor;
 	private LocalDate dataVencimento;
 	private Boolean fraude;
