@@ -11,15 +11,14 @@ import jakarta.validation.constraints.NotEmpty;
 
 @Entity
 @Table(name = "tickets")
-public class Ticket {
+public class boleto {
 	
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private long id;
 	
-	
 	@NotEmpty
-	private String codigoDeBarras;
+	private String linhaDigitavel;
 	
 	private String nomeDoBanco;
 	
@@ -28,24 +27,26 @@ public class Ticket {
 	private String pagador;
 	
 	private Double valor;
+
 	private LocalDate dataVencimento;
+
 	private Boolean fraude;
 	
-	public Ticket() {
+	public boleto() {
 		
 	}
 	
-	public Ticket(String codigoDeBarras, String nomeDoBanco) {
-		this.codigoDeBarras = codigoDeBarras;
+	public boleto(String linhaDigitavel, String nomeDoBanco) {
+		this.linhaDigitavel = linhaDigitavel;
 		this.nomeDoBanco = nomeDoBanco;
 	}
 
-	public String getCodigoDeBarras() {
-		return codigoDeBarras;
+	public String getlinhaDigitavel() {
+		return linhaDigitavel;
 	}
 
-	public void setCodigoDeBarras(String codigoDeBarras) {
-		this.codigoDeBarras = codigoDeBarras;
+	public void setlinhaDigitavel(String linhaDigitavel) {
+		this.linhaDigitavel = linhaDigitavel;
 	}
 
 	public String getNomeDoBanco() {
@@ -92,7 +93,7 @@ public class Ticket {
 		return id;
 	}
 
-	public boolean isFraude() {
+	public Boolean isFraude() {
 		return fraude;
 	}
 	public void setFraude(Boolean fraude) {

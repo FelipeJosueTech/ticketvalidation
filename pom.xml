@@ -71,3 +71,6 @@
 	</build>
 
 </project>
+
+
+<!-- Gradle e Maven servem para buildar a aplicação e gerenciar as dependencias -->

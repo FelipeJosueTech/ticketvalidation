@@ -2,14 +2,18 @@ package br.com.projetoa3_sdm.ticketvalidation.model.services.dto;
 
 public class TicketRequest {
 	
-	private String codigoDeBarras;
+	private String linhaDigitavel;
 	private String nomeDoBanco;
-	
-	public String getCodigoDeBarras() {
-		return codigoDeBarras;
+
+	public TicketRequest(String linhaDigitavel) {
+		this.linhaDigitavel = linhaDigitavel;
 	}
-	public void setCodigoDeBarras(String codigoDeBarras) {
-		this.codigoDeBarras = codigoDeBarras;
+	
+	public String getlinhaDigitavel() {
+		return linhaDigitavel;
+	}
+	public void setlinhaDigitavel(String linhaDigitavel) {
+		this.linhaDigitavel = linhaDigitavel;
 	}
 	public String getNomeDoBanco() {
 		return nomeDoBanco;
