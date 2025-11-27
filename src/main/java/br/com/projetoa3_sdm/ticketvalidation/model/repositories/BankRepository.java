@@ -11,5 +11,5 @@ public interface BankRepository extends JpaRepository<Bank, String> {
 	
 	    Optional<Bank> findByCodigoDoBanco(String codigoDoBanco);
 		List<Bank> findAll();
-
+		
 }

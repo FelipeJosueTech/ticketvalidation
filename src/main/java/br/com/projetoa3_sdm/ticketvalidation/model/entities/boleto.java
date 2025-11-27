@@ -1,5 +1,6 @@
 package br.com.projetoa3_sdm.ticketvalidation.model.entities;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import jakarta.persistence.Entity;
@@ -21,12 +22,16 @@ public class boleto {
 	private String linhaDigitavel;
 	
 	private String nomeDoBanco;
+
+	private String nomeInformado;
+
+	private String moeda;
 	
 	private String beneficiario;
 	
 	private String pagador;
 	
-	private Double valor;
+	private BigDecimal valor;
 
 	private LocalDate dataVencimento;
 
@@ -53,6 +58,14 @@ public class boleto {
 		return nomeDoBanco;
 	}
 
+	public void setNomeInformado(String nomeInformado) {
+		this.nomeInformado = nomeInformado;
+	}
+
+	public String getNomeInformado() {
+		return nomeInformado;
+	}
+
 	public void setNomeDoBanco(String nomeDoBanco) {
 		this.nomeDoBanco = nomeDoBanco;
 	}
@@ -73,11 +86,11 @@ public class boleto {
 		this.pagador = pagador;
 	}
 
-	public Double getValor() {
+	public BigDecimal getValor() {
 		return valor;
 	}
 
-	public void setValor(Double valor) {
+	public void setValor(BigDecimal valor) {
 		this.valor = valor;
 	}
 
@@ -89,6 +102,14 @@ public class boleto {
 		this.dataVencimento = dataVencimento;
 	}
 
+	public String getMoeda() {
+		return moeda;
+	}
+
+	public void setMoeda(String moeda) {
+		this.moeda = moeda;
+	}
+
 	public long getId() {
 		return id;
 	}
@@ -96,6 +117,7 @@ public class boleto {
 	public Boolean isFraude() {
 		return fraude;
 	}
+	
 	public void setFraude(Boolean fraude) {
 		this.fraude = fraude;
 	}

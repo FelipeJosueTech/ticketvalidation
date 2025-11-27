@@ -1,5 +1,6 @@
 package br.com.projetoa3_sdm.ticketvalidation.model.services;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Random;
@@ -18,7 +19,7 @@ public class TicketService {
 	@Autowired
 	private BankRepository bankRepository;
 
-	private static final LocalDate DATA_BASE = LocalDate.of(1997, 10, 7);
+	private static final LocalDate DATA_BASE = LocalDate.of(2022, 05, 29);
 
 	// Lista fixa de nomes para simular pagadores
 	private static final List<String> NOMES_PAGADOR = List.of(
@@ -31,9 +32,10 @@ public class TicketService {
 	public boleto validate (TicketRequest request) {
 		
 		// Cria o objeto boleto com os dados do request
-		boleto boleto = parseAux(request.getlinhaDigitavel(), request.getNomeDoBanco());
+		boleto boletoAux = new boleto(request.getlinhaDigitavel(), request.getnomeInformado());
+		boleto boleto = parseAux(request.getlinhaDigitavel(), request.getnomeInformado());
 		
-		boolean isFraude = validateFraud(boleto);
+		boolean isFraude = validateFraud(boletoAux);
 		boleto.setFraude(isFraude);
 		
 		return boleto;
@@ -45,16 +47,17 @@ public class TicketService {
 		return parseAux(request.getlinhaDigitavel(), nomeDoBanco);
 	}
 
-	public boleto parseAux(String linhaDigitavel, String nomeDoBanco) {
-		boleto boleto = new boleto (linhaDigitavel, nomeDoBanco);
+	public boleto parseAux(String linhaDigitavel, String nomeInformado) {
+		boleto boleto = new boleto (linhaDigitavel, nomeInformado);
 
+		boleto.setMoeda("REAL");
 		//Define informações fixas do boleto
 		boleto.setBeneficiario(getRandomNomeEmpresa());
 		boleto.setPagador(getRandomNomePagador());
 
 		// Extrai o código do banco a partir do código de barras
-		String codigoDeBarras = linhaDigitavelParaCodigoBarras(linhaDigitavel);
-		LocalDate vencimento = obterDataVencimento(codigoDeBarras);
+		String codigoDeBarras = boleto.getlinhaDigitavel();
+		LocalDate vencimento = obterDataVencimento(extractCampo5FromLinhaDigitavel(codigoDeBarras));
 
 		if (vencimento != null) {
 			boleto.setDataVencimento(vencimento);
@@ -63,7 +66,7 @@ public class TicketService {
 		}
 
 		// Extrai o valor do boleto a partir do código de barras
-		Double valor = extractValorBoleto(codigoDeBarras);
+		BigDecimal valor = extractValorBoleto(extractCampo5FromLinhaDigitavel(codigoDeBarras));
 		boleto.setValor(valor);
 
 		// Obtém o nome do banco a partir do código do banco no código de barras
@@ -73,31 +76,19 @@ public class TicketService {
 		if (bank == null) {
 			bank = new Bank();
     		bank.setCodigoDoBanco(codigoDoBanco);
-    		bank.setNomeDoBanco("Desconhecido");
+			bank.setNomeDoBanco("Desconhecido");
 		}
 
-		boleto.setNomeDoBanco(bank.getNomeDoBanco());
+		if (nomeInformado == null || nomeInformado.isBlank()) {
+			boleto.setNomeDoBanco(bank.getNomeDoBanco());
+		} else {
+			boleto.setNomeDoBanco(nomeInformado);
+		}
+
+		// opcional: manter o nome informado separado se houver campo específico
+		boleto.setNomeInformado(nomeInformado);
 
 		return boleto;
-	}
-
-	private Double extractValorBoleto(String codigoBarras) {
-		String valorDoBoletoSTR = null;
-		Double valorDoBoleto = null;
-		try {
-			valorDoBoletoSTR = codigoBarras.substring(9, 19);
-			// insere ponto antes dos dois últimos dígitos e converte para double
-			if (valorDoBoletoSTR.length() >= 2) {
-				String withPoint = valorDoBoletoSTR.substring(0, valorDoBoletoSTR.length() - 2)
-					+ "." + valorDoBoletoSTR.substring(valorDoBoletoSTR.length() - 2);
-				valorDoBoleto = Double.parseDouble(withPoint);
-			} else {
-				throw new NumberFormatException("valorDoBoletoSTR inválido: " + valorDoBoletoSTR);
-			}
-		} catch (Exception e) {
-			throw new NumberFormatException("Erro ao extrair valor do boleto: " + e.getMessage());
-		}
-		return valorDoBoleto;
 	}
 
 	private String getRandomNomePagador() {
@@ -113,67 +104,87 @@ public class TicketService {
 	}
 
 	private boolean validateFraud(boleto boleto) {
-		
-		boolean fraude = false;
 
-		if (boleto.getlinhaDigitavel().length() != 47) {
-			fraude = true;
+		// entradas inválidas -> suspeita de fraude
+		if (boleto == null || boleto.getlinhaDigitavel() == null) {
+			return true;
 		}
 
-		String codigoDoBanco = null;
-        try {
-            codigoDoBanco = boleto.getlinhaDigitavel().substring(0, 3);
-        } catch (NumberFormatException e) {
-            fraude = true;
-        }
+		String linha = apenasDigitos(boleto.getlinhaDigitavel());
+		if (linha.length() != 47) {
+			return true;
+		}
 
-		Bank bank = null;
-        if (!fraude) {
-            bank = bankRepository.findByCodigoDoBanco(codigoDoBanco).orElse(null);
-            // Se não encontrou o banco ou o nome não bate
-            if (bank == null || !bank.getNomeDoBanco().equalsIgnoreCase(boleto.getNomeDoBanco())) {
-                fraude = true;
-            }
-        }
+		String codigoDoBanco = linha.substring(0, 3);
 
-		return fraude; // Placeholder
+		Bank bank = bankRepository.findByCodigoDoBanco(codigoDoBanco).orElse(null);
+		if (bank == null) {
+			return true;
+		}
+
+		String nomeCadastrado = normalize(bank.getNomeDoBanco());
+		String nomeFornecido = normalize(boleto.getNomeDoBanco());
+		if (!nomeCadastrado.equals(nomeFornecido)) {
+			return true;
+		}
+
+		return false;
+	}
+
+	private String normalize(String s) {
+		if (s == null) return "";
+		String n = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
+			.replaceAll("\\p{M}", "");
+		return n.trim().toLowerCase();
 	}
 
 	public List<Bank> getBankCodes() {
 		return bankRepository.findAll();
 	}
 
-    public static String linhaDigitavelParaCodigoBarras(String linha) {
-        linha = linha.replaceAll("\\D", ""); // remove pontos e espaços
-
-        if (linha.length() != 47)
-            throw new IllegalArgumentException("Linha digitável deve ter 47 dígitos");
-
-        String campo1 = linha.substring(0, 9);     // sem o DV do campo
-        String campo2 = linha.substring(10, 20);   // sem o DV do campo
-        String campo3 = linha.substring(21, 31);   // sem o DV do campo
-        String dvGeral = linha.substring(32, 33);
-        String fatorValor = linha.substring(33, 47);
-
-        return campo1.substring(0, 4)   // Banco + Moeda
-                + dvGeral              // DV geral
-                + fatorValor           // Fator + Valor
-                + campo1.substring(4, 9)
-                + campo2
-                + campo3;
+	private static String apenasDigitos(String s) {
+        return s == null ? "" : s.replaceAll("\\D", "");
     }
 
-	public static LocalDate obterDataVencimento(String codigoBarras) {
-        if (codigoBarras.length() != 44)
-            throw new IllegalArgumentException("Código de barras deve ter 44 dígitos");
+	public static String extractCampo5FromLinhaDigitavel(String linhaDigitavel) {
+        String s = apenasDigitos(linhaDigitavel);
+        if (s.length() == 47) {
+            // últimos 14 dígitos
+            return s.substring(33, 47);
+        } 
+        else {
+            throw new IllegalArgumentException("Linha digitavel inválida. Esperado 47 dígitos. Recebido: " + s.length());
+        }
+    }
 
-        String fatorStr = codigoBarras.substring(5, 9);
+ 	public static LocalDate obterDataVencimento(String campo5) {
+        campo5 = campo5.replaceAll("\\D", "");
+
+        if (campo5.length() != 14) {
+            throw new IllegalArgumentException("Campo 5 deve ter 14 dígitos.");
+        }
+
+        String fatorStr = campo5.substring(0, 4);
         int fator = Integer.parseInt(fatorStr);
 
-        if (fator == 0)
-            return null; // sem data de vencimento
+        // fator 0000 significa boleto sem vencimento
+        if (fator == 0) {
+            return null; // sem vencimento
+        }
 
         return DATA_BASE.plusDays(fator);
-    }
+    }	 
 
+	public static BigDecimal extractValorBoleto(String campo5) {
+        campo5 = campo5.replaceAll("\\D", "");
+
+        if (campo5.length() != 14) {
+            throw new IllegalArgumentException("Campo 5 deve ter 14 dígitos.");
+        }
+
+        String valorStr = campo5.substring(5, 14); // últimos 10 dígitos
+        long centavos = Long.parseLong(valorStr);
+
+        return BigDecimal.valueOf(centavos).movePointLeft(2);
+    }
 }

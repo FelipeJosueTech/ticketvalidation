@@ -3,7 +3,7 @@ package br.com.projetoa3_sdm.ticketvalidation.model.services.dto;
 public class TicketRequest {
 	
 	private String linhaDigitavel;
-	private String nomeDoBanco;
+	private String nomeInformado;
 
 	public TicketRequest(String linhaDigitavel) {
 		this.linhaDigitavel = linhaDigitavel;
@@ -15,11 +15,11 @@ public class TicketRequest {
 	public void setlinhaDigitavel(String linhaDigitavel) {
 		this.linhaDigitavel = linhaDigitavel;
 	}
-	public String getNomeDoBanco() {
-		return nomeDoBanco;
+	public String getnomeInformado() {
+		return nomeInformado;
 	}
-	public void setNomeDoBanco(String nomeDoBanco) {
-		this.nomeDoBanco = nomeDoBanco;
+	public void setnomeInformado(String nomeInformado) {
+		this.nomeInformado = nomeInformado;
 	}
 	
 	
