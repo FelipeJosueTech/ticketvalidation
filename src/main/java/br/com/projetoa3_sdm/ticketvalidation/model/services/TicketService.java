@@ -7,10 +7,13 @@ import java.util.Random;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import br.com.projetoa3_sdm.ticketvalidation.model.entities.Bank;
 import br.com.projetoa3_sdm.ticketvalidation.model.entities.boleto;
 import br.com.projetoa3_sdm.ticketvalidation.model.repositories.BankRepository;
+import br.com.projetoa3_sdm.ticketvalidation.model.repositories.BoletoRepository;
 import br.com.projetoa3_sdm.ticketvalidation.model.services.dto.TicketRequest;
 
 @Service
@@ -19,31 +22,65 @@ public class TicketService {
 	@Autowired
 	private BankRepository bankRepository;
 
+	@Autowired
+	private BoletoRepository boletoRepository;
+
 	private static final LocalDate DATA_BASE = LocalDate.of(2022, 05, 29);
 
-	// Lista fixa de nomes para simular pagadores
-	private static final List<String> NOMES_PAGADOR = List.of(
-		"Felipe Josué","Amanda Hellen","João José","Anna Maria");
-	
-	private static final List<String> NOMES_EMPRESAS = List.of(
-		"Nextron Solutions","VerdeVale Alimentos","Alphacred Financeira","Luminor Energia");
-
-	// Método para validar o boleto	
+	// Método para validar o boleto    
 	public boleto validate (TicketRequest request) {
-		
-		// Cria o objeto boleto com os dados do request
+		// Cria o objeto boleto com os dados do request (dados fornecidos pelo cliente)
 		boleto boletoAux = new boleto(request.getlinhaDigitavel(), request.getnomeInformado());
-		boleto boleto = parseAux(request.getlinhaDigitavel(), request.getnomeInformado());
 		
-		boolean isFraude = validateFraud(boletoAux);
-		boleto.setFraude(isFraude);
+		if (request.getValor() != null && !request.getValor().isBlank()) {
+			try {
+				java.math.BigDecimal v = new java.math.BigDecimal(request.getValor().replace(',', '.'));
+				boletoAux.setValor(v);
+			} catch (NumberFormatException e) {
+				boletoAux.setValor(null);
+			}
+		}
 		
-		return boleto;
+		boletoAux.setBeneficiario(request.getBeneficiario());
+		boletoAux.setPagador(request.getPagador());
+
+		try {
+
+			boleto boleto = parseAux(request.getlinhaDigitavel(), request.getnomeInformado());
+
+			if (request.getPagador() != null && !request.getPagador().isBlank()) {
+				boleto.setPagador(request.getPagador());
+			}
+
+			if (request.getBeneficiario() != null && !request.getBeneficiario().isBlank()) {
+				boleto.setBeneficiario(request.getBeneficiario());
+			}
+
+			boolean isFraude = validateFraud(boleto, boletoAux);
+			boleto.setFraude(isFraude);
+
+			saveBoletoSafe(boleto);
+
+			return boleto;
+		} catch (Exception ex) {
+			System.out.println("Erro durante validação de boleto: " + ex.getMessage());
+
+			boletoAux.setFraude(true);
+			saveBoletoSafe(boletoAux);
+			return boletoAux;
+		}
+	}
+
+	private void saveBoletoSafe(boleto b) {
+		try {
+			boletoRepository.save(b);
+		} catch (Exception e) {
+			System.out.println("Erro ao salvar boleto: " + e.getMessage());
+		}
 	}
 
 	public boleto parse(TicketRequest request) {
 		String nomeDoBanco = null; 
-
 		return parseAux(request.getlinhaDigitavel(), nomeDoBanco);
 	}
 
@@ -51,25 +88,22 @@ public class TicketService {
 		boleto boleto = new boleto (linhaDigitavel, nomeInformado);
 
 		boleto.setMoeda("REAL");
-		//Define informações fixas do boleto
-		boleto.setBeneficiario(getRandomNomeEmpresa());
-		boleto.setPagador(getRandomNomePagador());
 
-		// Extrai o código do banco a partir do código de barras
+		boleto.setBeneficiario(null);
+		boleto.setPagador(null);
+
 		String codigoDeBarras = boleto.getlinhaDigitavel();
 		LocalDate vencimento = obterDataVencimento(extractCampo5FromLinhaDigitavel(codigoDeBarras));
 
 		if (vencimento != null) {
 			boleto.setDataVencimento(vencimento);
 		} else {
-			boleto.setDataVencimento(null); // Sem data de vencimento
+			boleto.setDataVencimento(null);
 		}
 
-		// Extrai o valor do boleto a partir do código de barras
 		BigDecimal valor = extractValorBoleto(extractCampo5FromLinhaDigitavel(codigoDeBarras));
 		boleto.setValor(valor);
 
-		// Obtém o nome do banco a partir do código do banco no código de barras
 		String codigoDoBanco = boleto.getlinhaDigitavel().substring(0, 3);
 		Bank bank = bankRepository.findByCodigoDoBanco(codigoDoBanco).orElse(null);
 
@@ -79,53 +113,68 @@ public class TicketService {
 			bank.setNomeDoBanco("Desconhecido");
 		}
 
-		if (nomeInformado == null || nomeInformado.isBlank()) {
-			boleto.setNomeDoBanco(bank.getNomeDoBanco());
-		} else {
-			boleto.setNomeDoBanco(nomeInformado);
-		}
+		boleto.setNomeDoBanco(bank.getNomeDoBanco());
 
-		// opcional: manter o nome informado separado se houver campo específico
+		boleto.setNomeInformado(nomeInformado);
+
+		if (nomeInformado != null && !nomeInformado.isBlank()) {
+			boleto.setNomeDoBanco(nomeInformado);
+		} else {
+			boleto.setNomeDoBanco(bank.getNomeDoBanco());
+		}
+		
 		boleto.setNomeInformado(nomeInformado);
 
 		return boleto;
 	}
 
-	private String getRandomNomePagador() {
-		Random random = new Random();
-		int index = random.nextInt(NOMES_PAGADOR.size());
-		return NOMES_PAGADOR.get(index);
-	}
+	private boolean validateFraud(boleto boletoParseado, boleto boletoInformado) {
 
-	private String getRandomNomeEmpresa() {
-		Random random = new Random();
-		int index = random.nextInt(NOMES_EMPRESAS.size());
-		return NOMES_EMPRESAS.get(index);
-	}
-
-	private boolean validateFraud(boleto boleto) {
-
-		// entradas inválidas -> suspeita de fraude
-		if (boleto == null || boleto.getlinhaDigitavel() == null) {
+		if (boletoParseado == null || boletoParseado.getlinhaDigitavel() == null) {
 			return true;
 		}
 
-		String linha = apenasDigitos(boleto.getlinhaDigitavel());
+		String linha = apenasDigitos(boletoParseado.getlinhaDigitavel());
 		if (linha.length() != 47) {
 			return true;
 		}
 
 		String codigoDoBanco = linha.substring(0, 3);
-
 		Bank bank = bankRepository.findByCodigoDoBanco(codigoDoBanco).orElse(null);
 		if (bank == null) {
 			return true;
 		}
 
 		String nomeCadastrado = normalize(bank.getNomeDoBanco());
-		String nomeFornecido = normalize(boleto.getNomeDoBanco());
-		if (!nomeCadastrado.equals(nomeFornecido)) {
-			return true;
+		
+		if (boletoInformado != null && boletoInformado.getNomeDoBanco() != null) {
+			String nomeFornecido = normalize(boletoInformado.getNomeDoBanco());
+			if (!nomeCadastrado.equals(nomeFornecido)) {
+				return true;
+			}
+		}
+
+		if (boletoInformado != null && boletoInformado.getValor() != null) {
+			java.math.BigDecimal valorInformado = boletoInformado.getValor();
+			java.math.BigDecimal valorExtraido = boletoParseado.getValor();
+
+			if (valorExtraido == null || valorInformado.compareTo(valorExtraido) != 0) {
+				return true;
+			}
+		}
+
+		// compara beneficiario/pagador se informado pelo cliente
+		if (boletoInformado != null) {
+			String beneficiarioInformado = normalize(boletoInformado.getBeneficiario());
+			if (!beneficiarioInformado.isEmpty()) {
+				String beneficiarioExtraido = normalize(boletoParseado.getBeneficiario());
+				if (!beneficiarioInformado.equals(beneficiarioExtraido)) return true;
+			}
+			String pagadorInformado = normalize(boletoInformado.getPagador());
+			if (!pagadorInformado.isEmpty()) {
+				String pagadorExtraido = normalize(boletoParseado.getPagador());
+				if (!pagadorInformado.equals(pagadorExtraido)) return true;
+			}
 		}
 
 		return false;
@@ -149,7 +198,6 @@ public class TicketService {
 	public static String extractCampo5FromLinhaDigitavel(String linhaDigitavel) {
         String s = apenasDigitos(linhaDigitavel);
         if (s.length() == 47) {
-            // últimos 14 dígitos
             return s.substring(33, 47);
         } 
         else {
@@ -159,32 +207,24 @@ public class TicketService {
 
  	public static LocalDate obterDataVencimento(String campo5) {
         campo5 = campo5.replaceAll("\\D", "");
-
         if (campo5.length() != 14) {
             throw new IllegalArgumentException("Campo 5 deve ter 14 dígitos.");
         }
-
         String fatorStr = campo5.substring(0, 4);
         int fator = Integer.parseInt(fatorStr);
-
-        // fator 0000 significa boleto sem vencimento
         if (fator == 0) {
-            return null; // sem vencimento
+            return null;
         }
-
         return DATA_BASE.plusDays(fator);
     }	 
 
 	public static BigDecimal extractValorBoleto(String campo5) {
         campo5 = campo5.replaceAll("\\D", "");
-
         if (campo5.length() != 14) {
             throw new IllegalArgumentException("Campo 5 deve ter 14 dígitos.");
         }
-
-        String valorStr = campo5.substring(5, 14); // últimos 10 dígitos
+        String valorStr = campo5.substring(5, 14); 
         long centavos = Long.parseLong(valorStr);
-
         return BigDecimal.valueOf(centavos).movePointLeft(2);
     }
 }

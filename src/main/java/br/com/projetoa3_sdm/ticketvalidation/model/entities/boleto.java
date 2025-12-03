@@ -3,6 +3,7 @@ package br.com.projetoa3_sdm.ticketvalidation.model.entities;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -19,6 +20,7 @@ public class boleto {
 	private long id;
 	
 	@NotEmpty
+	@Column(name = "linha_digitavel", nullable = false)
 	private String linhaDigitavel;
 	
 	private String nomeDoBanco;
