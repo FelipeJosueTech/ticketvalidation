@@ -59,10 +59,6 @@ Essa abordagem mantém o código organizado, desacoplado e de fácil manutençã
 
 ---
 
-## 🔌 Endpoints Principais
-
-VERIFICAR
-
 ### **Criar ticket**
 
 ```
